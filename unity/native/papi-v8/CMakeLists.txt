@@ -377,6 +377,8 @@ set(EXPORTED_SYMBOLS
     CreateV8PapiEnvRef
     DestroyV8PapiEnvRef
     GetV8Isolate
+    ClearV8ModuleCache
+    V8ModuleEvaluated
     LowMemoryNotification
     IdleNotificationDeadline
     RequestMinorGarbageCollectionForTesting

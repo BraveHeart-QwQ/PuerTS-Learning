@@ -34,6 +34,14 @@ namespace Puerts
         [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern IntPtr GetV8Isolate(IntPtr envRef);
 
+        /// <summary>清除指定路径的 ESM 缓存并返回是否移除了条目</summary>
+        [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int ClearV8ModuleCache(IntPtr isolate, [MarshalAs(UnmanagedType.LPUTF8Str)] string modulePath);
+
+        /// <summary>查询指定路径的 ESM 是否已经完成求值</summary>
+        [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int V8ModuleEvaluated(IntPtr isolate, [MarshalAs(UnmanagedType.LPUTF8Str)] string modulePath);
+
         [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern void LowMemoryNotification(IntPtr isolate);
 

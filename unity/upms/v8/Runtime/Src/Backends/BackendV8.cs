@@ -47,6 +47,27 @@ namespace Puerts
         public override void DestroyEnvRef(IntPtr envRef)
         {
             PapiV8Native.DestroyV8PapiEnvRef(envRef);
+            isolate = IntPtr.Zero;
+        }
+
+        /*====-------------- Module Cache --------------====*/
+
+        /// <summary>移除指定模块的 ESM 缓存，已有对象及函数引用继续存活</summary>
+        public bool ClearModuleCache(string modulePath)
+        {
+            if (isolate == IntPtr.Zero)
+                throw new InvalidOperationException("V8 environment is not available");
+            if (string.IsNullOrEmpty(modulePath))
+                throw new ArgumentException("ESM cache clearing requires a module path", nameof(modulePath));
+            return PapiV8Native.ClearV8ModuleCache(isolate, modulePath) != 0;
+        }
+
+        /// <summary>查询指定模块是否已完成求值，未加载或求值失败均返回 false</summary>
+        public bool ModuleEvaluated(string modulePath)
+        {
+            if (isolate == IntPtr.Zero)
+                throw new InvalidOperationException("V8 environment is not available");
+            return PapiV8Native.V8ModuleEvaluated(isolate, modulePath) != 0;
         }
 
         public virtual bool IdleNotificationDeadline(double DeadlineInSeconds)

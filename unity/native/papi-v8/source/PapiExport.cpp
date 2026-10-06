@@ -84,6 +84,37 @@ V8_EXPORT v8::Isolate *GetV8Isolate(pesapi_env_ref env_ref)
     return isolate;
 }
 
+// 清除指定路径的 ESM 缓存，返回是否移除了缓存条目
+V8_EXPORT int ClearV8ModuleCache(v8::Isolate *Isolate, const char *Path)
+{
+    if (Path == nullptr || Path[0] == '\0')
+        return 0;
+#ifdef THREAD_SAFE
+    v8::Locker Locker(Isolate);
+#endif
+    v8::Isolate::Scope IsolateScope(Isolate);
+    v8::HandleScope HandleScope(Isolate);
+    puerts::FBackendEnv *Backend = puerts::FBackendEnv::Get(Isolate);
+    v8::Local<v8::Context> Context = Backend->MainContext.Get(Isolate);
+    v8::Context::Scope ContextScope(Context);
+    return Backend->ClearModuleCache(Isolate, Context, Path) ? 1 : 0;
+}
+
+// 查询指定路径是否已完成 ESM 求值，编译或求值失败均返回零
+V8_EXPORT int V8ModuleEvaluated(v8::Isolate *Isolate, const char *Path)
+{
+    if (Path == nullptr || Path[0] == '\0')
+        return 0;
+#ifdef THREAD_SAFE
+    v8::Locker Locker(Isolate);
+#endif
+    v8::Isolate::Scope IsolateScope(Isolate);
+    v8::HandleScope HandleScope(Isolate);
+    puerts::FBackendEnv *Backend = puerts::FBackendEnv::Get(Isolate);
+    auto Module = Backend->PathToModuleMap.find(Path);
+    return Module != Backend->PathToModuleMap.end() && Module->second.Get(Isolate)->GetStatus() == v8::Module::kEvaluated ? 1 : 0;
+}
+
 V8_EXPORT void LowMemoryNotification(v8::Isolate *Isolate)
 {
     auto JsEngine = FV8Utils::IsolateData<JSEngine>(Isolate);
