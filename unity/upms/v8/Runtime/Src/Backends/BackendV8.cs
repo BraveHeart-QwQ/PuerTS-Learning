@@ -70,6 +70,14 @@ namespace Puerts
             return PapiV8Native.V8ModuleEvaluated(isolate, modulePath) != 0;
         }
 
+        /// <summary>向宿主交接原生模块记录查询入口</summary>
+        public void InstallModuleCapture()
+        {
+            if (isolate == IntPtr.Zero)
+                throw new InvalidOperationException("V8 environment is not available");
+            PapiV8Native.InstallV8ModuleCapture(isolate);
+        }
+
         public virtual bool IdleNotificationDeadline(double DeadlineInSeconds)
         {
             return PapiV8Native.IdleNotificationDeadline(isolate, DeadlineInSeconds);

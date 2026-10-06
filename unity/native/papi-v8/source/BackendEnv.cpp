@@ -856,10 +856,27 @@ v8::MaybeLocal<v8::Promise> esmodule::HostImportModuleDynamically(
     return resolver->GetPromise();
 }
 
+// 将编译器生成的绑定入口保存到 namespace 的原生私有属性，业务无法读取此入口
+static void CaptureModuleBindings(const v8::FunctionCallbackInfo<v8::Value>& Info)
+{
+    v8::Isolate* Isolate = Info.GetIsolate();
+    v8::Local<v8::Context> Context = Isolate->GetCurrentContext();
+    if (Info.Length() != 1 || !Info[0]->IsObject())
+        return;
+    v8::Local<v8::Object> Record = Info[0].As<v8::Object>();
+    Record->CreateDataProperty(Context, v8::String::NewFromUtf8Literal(Isolate, "module"), Info.Data()).Check();
+    Info.Data().As<v8::Object>()->SetPrivate(Context,
+        v8::Private::ForApi(Isolate, v8::String::NewFromUtf8Literal(Isolate, "puerts.module.bindings")), Record).Check();
+    Info.This()->Delete(Context, v8::String::NewFromUtf8Literal(Isolate, "__puertsCapture")).Check();
+}
+
 void esmodule::HostInitializeImportMetaObject(v8::Local<v8::Context> Context, v8::Local<v8::Module> Module, v8::Local<v8::Object> meta)
 {
     v8::Isolate* Isolate = Context->GetIsolate();
     FBackendEnv* mm = FBackendEnv::Get(Isolate);
+
+    meta->CreateDataProperty(Context, v8::String::NewFromUtf8Literal(Isolate, "__puertsCapture"),
+        v8::Function::New(Context, CaptureModuleBindings, Module->GetModuleNamespace()).ToLocalChecked()).Check();
 
 #if V8_94_OR_NEWER
     auto iter = mm->ScriptIdToPathMap.find(Module->ScriptId());

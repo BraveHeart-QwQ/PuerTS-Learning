@@ -42,6 +42,10 @@ namespace Puerts
         [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int V8ModuleEvaluated(IntPtr isolate, [MarshalAs(UnmanagedType.LPUTF8Str)] string modulePath);
 
+        /// <summary>交接模块私有绑定查询函数，由 Runtime 立即收回全局属性</summary>
+        [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void InstallV8ModuleCapture(IntPtr isolate);
+
         [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern void LowMemoryNotification(IntPtr isolate);
 

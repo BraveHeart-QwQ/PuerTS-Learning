@@ -379,6 +379,7 @@ set(EXPORTED_SYMBOLS
     GetV8Isolate
     ClearV8ModuleCache
     V8ModuleEvaluated
+    InstallV8ModuleCapture
     LowMemoryNotification
     IdleNotificationDeadline
     RequestMinorGarbageCollectionForTesting
