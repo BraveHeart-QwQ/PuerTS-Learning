@@ -378,6 +378,8 @@ set(EXPORTED_SYMBOLS
     DestroyV8PapiEnvRef
     GetV8Isolate
     ClearV8ModuleCache
+    BeginV8ReloadCache
+    EndV8ReloadCache
     V8ModuleEvaluated
     InstallV8ModuleCapture
     LowMemoryNotification

@@ -58,7 +58,8 @@ namespace PUERTS_NAMESPACE
             v8::HandleScope HandleScope(Isolate);
             auto Context = ResultInfo.Context.Get(Isolate);
             v8::Context::Scope ContextScope(Context);
-            BackendEnv.PathToModuleMap.clear();
+            BackendEnv.EndReloadCache(false);
+            BackendEnv.ClearModuleCache(Isolate, Context, "");
             BackendEnv.ScriptIdToPathMap.clear();
         }
         ResultInfo.Context.Reset();

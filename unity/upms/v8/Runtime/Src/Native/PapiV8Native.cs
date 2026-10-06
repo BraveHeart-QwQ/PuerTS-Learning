@@ -38,6 +38,14 @@ namespace Puerts
         [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int ClearV8ModuleCache(IntPtr isolate, [MarshalAs(UnmanagedType.LPUTF8Str)] string modulePath);
 
+        /// <summary>开始暂存原模块缓存并暂停微任务，已有暂存时返回零</summary>
+        [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int BeginV8ReloadCache(IntPtr isolate);
+
+        /// <summary>结束缓存暂存并按提交结果恢复或释放原模块，未开始时返回零</summary>
+        [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int EndV8ReloadCache(IntPtr isolate, int success);
+
         /// <summary>查询指定路径的 ESM 是否已经完成求值</summary>
         [DllImport(PAPIDLLNAME, CallingConvention = CallingConvention.Cdecl)]
         public static extern int V8ModuleEvaluated(IntPtr isolate, [MarshalAs(UnmanagedType.LPUTF8Str)] string modulePath);

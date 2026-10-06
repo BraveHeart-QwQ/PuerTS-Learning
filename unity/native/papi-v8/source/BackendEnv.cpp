@@ -438,10 +438,22 @@ bool FBackendEnv::ClearModuleCache(v8::Isolate* Isolate, v8::Local<v8::Context> 
         auto finder = PathToModuleMap.find(key);
         if (finder != PathToModuleMap.end()) 
         {
-            auto iter = FindModuleInfo(finder->second.Get(Isolate));
+            auto module = finder->second.Get(Isolate);
+            auto iter = FindModuleInfo(module);
+            // 只暂存本轮首次移出的原模块，重复清理候选不覆盖原记录
+            bool original = ReloadCache && std::none_of(ReloadCache->Created.begin(), ReloadCache->Created.end(),
+                [&](const auto& created)
+                {
+                    return created.Module == module;
+                });
+            if (original)
+                ReloadCache->Modules.emplace(key, std::move(finder->second));
             if (iter != ScriptIdToModuleInfo.end())
             {
-                delete iter->second;
+                if (original)
+                    ReloadCache->ModuleInfos.emplace(iter->first, iter->second);
+                else
+                    delete iter->second;
                 ScriptIdToModuleInfo.erase(iter);
             }
             PathToModuleMap.erase(key);
@@ -450,6 +462,54 @@ bool FBackendEnv::ClearModuleCache(v8::Isolate* Isolate, v8::Local<v8::Context> 
         }
     }
     return false;
+}
+
+bool FBackendEnv::BeginReloadCache()
+{
+    if (ReloadCache)
+        return false;
+    ReloadCache = std::make_unique<FReloadCache>();
+    ReloadCache->Microtasks = std::make_unique<v8::Isolate::SuppressMicrotaskExecutionScope>(MainIsolate);
+    return true;
+}
+
+bool FBackendEnv::EndReloadCache(bool Success)
+{
+    if (!ReloadCache)
+        return false;
+    if (!Success)
+    {
+        // 编译清理可能已删掉某个新模块，按身份检查避免重复删除或误删原缓存
+        for (const auto& created : ReloadCache->Created)
+        {
+            auto module = created.Module.Get(MainIsolate);
+            auto info = FindModuleInfo(module);
+            if (info != ScriptIdToModuleInfo.end())
+            {
+                delete info->second;
+                ScriptIdToModuleInfo.erase(info);
+            }
+            auto cached = PathToModuleMap.find(created.Path);
+            if (cached != PathToModuleMap.end() && cached->second == module)
+                PathToModuleMap.erase(cached);
+            ScriptIdToPathMap.erase(created.ScriptId);
+        }
+        for (auto& saved : ReloadCache->Modules)
+            PathToModuleMap.emplace(saved.first, std::move(saved.second));
+        for (const auto& saved : ReloadCache->ModuleInfos)
+            ScriptIdToModuleInfo.emplace(saved.first, saved.second);
+    }
+    else
+    {
+        for (const auto& saved : ReloadCache->ModuleInfos)
+            delete saved.second;
+    }
+    // 旧函数的 import.meta.url 仍需原路径记录，只有被丢弃的新模块记录被清理
+    ReloadCache->ModuleInfos.clear();
+    ReloadCache->Modules.clear();
+    ReloadCache->Created.clear();
+    ReloadCache.reset();
+    return true;
 }
 
 
@@ -500,7 +560,16 @@ v8::MaybeLocal<v8::Module> FBackendEnv::FetchModuleTree(v8::Isolate* isolate, v8
     auto cached_module = PathToModuleMap.find(absolute_file_path_str);
     if (cached_module!= PathToModuleMap.end())
     {
-        return cached_module->second.Get(isolate);
+        auto cached = cached_module->second.Get(isolate);
+        // 原有未求值依赖需重新编译，避免候选改变其求值状态；本轮模块复用以支持循环依赖
+        if (!ReloadCache || cached->GetStatus() == v8::Module::kEvaluated ||
+            std::any_of(ReloadCache->Created.begin(), ReloadCache->Created.end(),
+                [&](const auto& created)
+                {
+                    return created.Module == cached;
+                }))
+            return cached;
+        ClearModuleCache(isolate, context, absolute_file_path_str.c_str());
     }
     std::string pathForDebug;
     
@@ -547,6 +616,8 @@ v8::MaybeLocal<v8::Module> FBackendEnv::FetchModuleTree(v8::Isolate* isolate, v8
     ScriptIdToModuleInfo.emplace(script_id, info);
     PathToModuleMap[absolute_file_path_str] = v8::UniquePersistent<v8::Module>(isolate, module);
     ScriptIdToPathMap[script_id] = absolute_file_path_str;
+    if (ReloadCache)
+        ReloadCache->Created.push_back({absolute_file_path_str, script_id, v8::Global<v8::Module>(isolate, module)});
     bool load_ref_modules_fail = false;
 
 #ifdef V8_94_OR_NEWER
@@ -600,6 +671,15 @@ v8::MaybeLocal<v8::Module> FBackendEnv::FetchModuleTree(v8::Isolate* isolate, v8
 
 std::unordered_multimap<int, FBackendEnv::FModuleInfo*>::iterator FBackendEnv::FindModuleInfo(v8::Local<v8::Module> module)
 {
+    // V8 禁止在 kErrored 模块上读取 ScriptId，失败清理按模块身份查找
+    if (module->GetStatus() == v8::Module::kErrored)
+    {
+        return std::find_if(ScriptIdToModuleInfo.begin(), ScriptIdToModuleInfo.end(),
+            [&](const auto& entry)
+            {
+                return entry.second->Module == module;
+            });
+    }
 #if V8_94_OR_NEWER
     int script_id = module->ScriptId();
 #else 

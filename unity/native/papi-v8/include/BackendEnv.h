@@ -10,6 +10,8 @@
 #include <map>
 #include <algorithm>
 #include <unordered_map>
+#include <memory>
+#include <vector>
 #include "Common.h"
 #include "Log.h"
 #include "V8InspectorImpl.h"
@@ -94,6 +96,24 @@ namespace PUERTS_NAMESPACE
             std::map<std::string, v8::Global<v8::Module>> ResolveCache;
         };
         std::unordered_multimap<int, FModuleInfo*> ScriptIdToModuleInfo;
+
+        // 保存一次同步更新移出的原缓存，并登记本轮新模块
+        struct FReloadCache
+        {
+            // 记录新模块的身份，失败模块不能再次查询 V8 ScriptId
+            struct FCreatedModule
+            {
+                std::string Path; // 本轮加载的模块路径
+                int ScriptId; // 编译完成时取得的脚本标识
+                v8::Global<v8::Module> Module; // 本轮创建的模块身份
+            };
+
+            std::map<std::string, v8::UniquePersistent<v8::Module>> Modules; // 暂存的原模块句柄
+            std::unordered_multimap<int, FModuleInfo*> ModuleInfos; // 暂存的原依赖解析记录，独占删除责任
+            std::vector<FCreatedModule> Created; // 本轮创建的模块记录，包括已被编译失败清理的模块
+            std::unique_ptr<v8::Isolate::SuppressMicrotaskExecutionScope> Microtasks; // 本轮跨宿主调用的微任务暂停范围
+        };
+        std::unique_ptr<FReloadCache> ReloadCache; // 仅在一次同步更新期间存在的暂存数据
         
         
         v8::MaybeLocal<v8::Value> ResolvePath(v8::Isolate* Isolate, v8::Local<v8::Context> Context, v8::Local<v8::Value> Specifier, v8::Local<v8::Value> ReferrerName);
@@ -135,6 +155,12 @@ namespace PUERTS_NAMESPACE
         bool InspectorTick();
 
         bool ClearModuleCache(v8::Isolate* Isolate, v8::Local<v8::Context> Context, const char* Path);
+
+        // 开始暂存后续清理的原缓存并暂停微任务，已有暂存时返回失败
+        bool BeginReloadCache();
+
+        // 成功时释放原缓存，失败时恢复原缓存，最后解除微任务暂停
+        bool EndReloadCache(bool Success);
 
         std::string GetJSStackTrace();
         

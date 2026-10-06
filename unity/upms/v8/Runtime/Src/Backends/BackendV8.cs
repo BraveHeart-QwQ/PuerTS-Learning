@@ -52,6 +52,24 @@ namespace Puerts
 
         /*====-------------- Module Cache --------------====*/
 
+        /// <summary>在 JS 调用返回后暂存原模块缓存并暂停微任务，直到本批提交或恢复完成</summary>
+        public void BeginReloadCache()
+        {
+            if (isolate == IntPtr.Zero)
+                throw new InvalidOperationException("V8 environment is not available");
+            if (PapiV8Native.BeginV8ReloadCache(isolate) == 0)
+                throw new InvalidOperationException("V8 reload cache is already active");
+        }
+
+        /// <summary>成功时释放暂存原缓存，失败时恢复原缓存，并解除微任务暂停</summary>
+        public void EndReloadCache(bool success)
+        {
+            if (isolate == IntPtr.Zero)
+                throw new InvalidOperationException("V8 environment is not available");
+            if (PapiV8Native.EndV8ReloadCache(isolate, success ? 1 : 0) == 0)
+                throw new InvalidOperationException("V8 reload cache is not active");
+        }
+
         /// <summary>移除指定模块的 ESM 缓存，已有对象及函数引用继续存活</summary>
         public bool ClearModuleCache(string modulePath)
         {

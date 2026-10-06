@@ -100,6 +100,27 @@ V8_EXPORT int ClearV8ModuleCache(v8::Isolate *Isolate, const char *Path)
     return Backend->ClearModuleCache(Isolate, Context, Path) ? 1 : 0;
 }
 
+// 开始宿主同步更新的缓存暂存，后续清缓存保留原模块并暂停微任务
+V8_EXPORT int BeginV8ReloadCache(v8::Isolate *Isolate)
+{
+#ifdef THREAD_SAFE
+    v8::Locker Locker(Isolate);
+#endif
+    v8::Isolate::Scope IsolateScope(Isolate);
+    return puerts::FBackendEnv::Get(Isolate)->BeginReloadCache() ? 1 : 0;
+}
+
+// 按宿主提交结果保留候选或恢复原缓存，然后解除微任务暂停
+V8_EXPORT int EndV8ReloadCache(v8::Isolate *Isolate, int Success)
+{
+#ifdef THREAD_SAFE
+    v8::Locker Locker(Isolate);
+#endif
+    v8::Isolate::Scope IsolateScope(Isolate);
+    v8::HandleScope HandleScope(Isolate);
+    return puerts::FBackendEnv::Get(Isolate)->EndReloadCache(Success != 0) ? 1 : 0;
+}
+
 // 查询指定路径是否已完成 ESM 求值，编译或求值失败均返回零
 V8_EXPORT int V8ModuleEvaluated(v8::Isolate *Isolate, const char *Path)
 {
